@@ -13,7 +13,7 @@ from django.contrib.auth import authenticate, login, logout
 
 from .serializers import LoginSerializer, StkPushSerializer
 
-@csrf_exempt
+
 class StkPushView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -22,8 +22,18 @@ class StkPushView(APIView):
         consumer_secret = settings.DARAJA_CONSUMER_SECRET
         api_url = f"{settings.DARAJA_BASE_URL}/oauth/v1/generate?grant_type=client_credentials"
         response = requests.get(api_url, auth=(consumer_key, consumer_secret))
-        json_response = response.json()
-        return json_response['access_token']
+
+        if response.status_code != 200:
+            print(f"Error: {response.status_code} - {response.text}")
+            return None
+
+        try:
+            json_response = response.json()
+        except requests.exceptions.JSONDecodeError:
+            print(f"JSONDecodeError: {response.text}")
+            return None
+
+        return json_response.get('access_token')
 
     def format_phone_number(self, phone_number):
         if phone_number.startswith('0'):
@@ -33,6 +43,7 @@ class StkPushView(APIView):
         else:
             return phone_number
 
+    @csrf_exempt
     def post(self, request, *args, **kwargs):
         serializer = StkPushSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -47,6 +58,10 @@ class StkPushView(APIView):
 
         formatted_phone_number = self.format_phone_number(phone_number)
         access_token = self.get_access_token()
+
+        if not access_token:
+            return JsonResponse({'error': 'Failed to retrieve access token'}, status=500)
+
         api_url = f"{settings.DARAJA_BASE_URL}/mpesa/stkpush/v1/processrequest"
         headers = {
             'Authorization': f'Bearer {access_token}',
@@ -54,7 +69,8 @@ class StkPushView(APIView):
         }
 
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        password = base64.b64encode(f"{settings.DARAJA_SHORTCODE}{settings.DARAJA_PASSKEY}{timestamp}".encode()).decode('utf-8')
+        password = base64.b64encode(f"{settings.DARAJA_SHORTCODE}{settings.DARAJA_PASSKEY}{timestamp}".encode()).decode(
+            'utf-8')
 
         payload = {
             "BusinessShortCode": settings.DARAJA_SHORTCODE,
@@ -71,10 +87,21 @@ class StkPushView(APIView):
         }
 
         response = requests.post(api_url, json=payload, headers=headers)
-        return JsonResponse(response.json())
 
-@csrf_exempt
+        if response.status_code != 200:
+            print(f"Error: {response.status_code} - {response.text}")
+            return JsonResponse({'error': 'Failed to process STK push request'}, status=500)
+
+        try:
+            json_response = response.json()
+        except requests.exceptions.JSONDecodeError:
+            print(f"JSONDecodeError: {response.text}")
+            return JsonResponse({'error': 'Failed to decode response from STK push request'}, status=500)
+
+        return JsonResponse(json_response)
+
 class StkPushCallbackView(View):
+    @csrf_exempt
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
         # Handle the callback data here
@@ -83,7 +110,6 @@ class StkPushCallbackView(View):
         return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
 
 
-@csrf_exempt
 class LoginView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
