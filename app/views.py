@@ -1,11 +1,6 @@
-from django.shortcuts import render
 import requests, base64, json
 from django.conf import settings
-from django.http import JsonResponse
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
-from django.utils import timezone
-from django.utils.decorators import method_decorator
 from datetime import datetime
 from django.http import JsonResponse
 from rest_framework.views import APIView
@@ -17,7 +12,6 @@ from django.contrib.auth import authenticate, login, logout
 
 from .serializers import LoginSerializer, StkPushSerializer
 
-# @method_decorator(csrf_exempt, name='dispatch')
 class StkPushView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -77,7 +71,6 @@ class StkPushView(APIView):
         response = requests.post(api_url, json=payload, headers=headers)
         return JsonResponse(response.json())
 
-# @method_decorator(csrf_exempt, name='dispatch')
 class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
@@ -87,7 +80,6 @@ class StkPushCallbackView(View):
         return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
