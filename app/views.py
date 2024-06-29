@@ -17,7 +17,7 @@ from django.contrib.auth import authenticate, login, logout
 
 from .serializers import LoginSerializer, StkPushSerializer
 
-@method_decorator(csrf_exempt, name='dispatch')
+# @method_decorator(csrf_exempt, name='dispatch')
 class StkPushView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -77,7 +77,7 @@ class StkPushView(APIView):
         response = requests.post(api_url, json=payload, headers=headers)
         return JsonResponse(response.json())
 
-@method_decorator(csrf_exempt, name='dispatch')
+# @method_decorator(csrf_exempt, name='dispatch')
 class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
