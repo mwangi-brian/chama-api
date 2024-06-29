@@ -16,7 +16,6 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 
 from .serializers import LoginSerializer, StkPushSerializer
-from .models import User, Chama
 
 @method_decorator(csrf_exempt, name='dispatch')
 class StkPushView(APIView):
@@ -70,7 +69,7 @@ class StkPushView(APIView):
             "PartyA": formatted_phone_number,
             "PartyB": settings.DARAJA_SHORTCODE,
             "PhoneNumber": formatted_phone_number,
-            "CallBackURL": "http://<random-id>.ngrok.io/callback/",  # Use ngrok URL here
+            "CallBackURL": settings.CALLBACK_URL,
             "AccountReference": chama_account,
             "TransactionDesc": "Payment for Chama"
         }
