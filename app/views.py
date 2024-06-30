@@ -11,10 +11,12 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+import logging
 
 from .models import Chama
 from .serializers import LoginSerializer, StkPushSerializer
 
+logger = logging.getLogger(__name__)
 
 class StkPushView(APIView):
     permission_classes = [IsAuthenticated]
@@ -105,6 +107,7 @@ class StkPushView(APIView):
 class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
+        logger.info(f"Callback data received: {data}")
 
         result_code = data.get("Body", {}).get("stkCallback", {}).get("ResultCode")
         callback_metadata = data.get("Body", {}).get("stkCallback", {}).get("CallbackMetadata", {})
@@ -119,15 +122,21 @@ class StkPushCallbackView(View):
                 elif item.get("Name") == "AccountReference":
                     chama_account = int(item.get("Value"))
 
+            logger.info(f"Extracted amount: {amount}, Chama account: {chama_account}")
+
             if chama_account is not None:
                 try:
                     chama = Chama.objects.get(chama_account=chama_account)
+                    logger.info(f"Chama found: {chama}, current balance: {chama.balance}")
                     chama.balance += amount
                     chama.save()
+                    logger.info(f"Updated balance: {chama.balance}")
                     return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
                 except Chama.DoesNotExist:
+                    logger.error(f"Chama with account {chama_account} not found")
                     return JsonResponse({"ResultCode": 1, "ResultDesc": "Chama not found"}, status=404)
 
+        logger.error(f"Transaction failed or invalid, result code: {result_code}")
         return JsonResponse({"ResultCode": 1, "ResultDesc": "Failed or invalid transaction"}, status=400)
 
 
