@@ -9,6 +9,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import Chama
 from .serializers import LoginSerializer, StkPushSerializer
@@ -99,6 +101,7 @@ class StkPushView(APIView):
         return JsonResponse(json_response)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
