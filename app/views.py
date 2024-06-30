@@ -12,6 +12,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 import logging
+from decimal import Decimal
 
 from .models import Chama, User
 from .serializers import LoginSerializer, StkPushSerializer
@@ -123,7 +124,7 @@ class StkPushCallbackView(View):
 
                 for item in callback_metadata.get("Item", []):
                     if item.get("Name") == "Amount":
-                        amount = float(item.get("Value"))
+                        amount = Decimal(item.get("Value"))
                     elif item.get("Name") == "PhoneNumber":
                         phone_number = str(item.get("Value"))
 
