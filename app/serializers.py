@@ -6,6 +6,7 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 class StkPushSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
     amount = serializers.DecimalField(max_digits=10, decimal_places=2)
 
 class DashboardSerializer(serializers.Serializer):

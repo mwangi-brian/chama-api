@@ -1,4 +1,5 @@
 import requests, base64, json
+from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.views import View
 from datetime import datetime
@@ -51,7 +52,7 @@ class StkPushView(APIView):
         amount = float(serializer.validated_data['amount'])
 
         user = request.user
-        phone_number = user.phone_number
+        phone_number = serializer.validated_data['phone_number']
         chama_account = user.chama.chama_account if user.chama else None
 
         if not phone_number or not chama_account:
@@ -168,10 +169,14 @@ class LogoutView(APIView):
         return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
 
 class UserDashboard(APIView):
-    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user_id = request.query_params.get('id')
+
+        if not user_id:
+            return Response({'error': 'User ID is required'}, status=400)
+
+        user = get_object_or_404(User, id=user_id)
         chama = user.chama
 
         if not chama:
