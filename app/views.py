@@ -11,13 +11,10 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-import logging
 from decimal import Decimal
 
 from .models import User
 from .serializers import LoginSerializer, StkPushSerializer, DashboardSerializer
-
-logger = logging.getLogger(__name__)
 
 class StkPushView(APIView):
     permission_classes = [IsAuthenticated]
@@ -109,13 +106,9 @@ class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
         try:
             data = json.loads(request.body)
-            logger.info(f"Callback data received: {json.dumps(data, indent=2)}")
 
             result_code = data.get("Body", {}).get("stkCallback", {}).get("ResultCode")
             callback_metadata = data.get("Body", {}).get("stkCallback", {}).get("CallbackMetadata", {})
-
-            logger.info(f"Result code: {result_code}")
-            logger.info(f"Callback metadata: {json.dumps(callback_metadata, indent=2)}")
 
             if result_code == 0:  # Transaction was successful
                 amount = 0
@@ -127,33 +120,24 @@ class StkPushCallbackView(View):
                     elif item.get("Name") == "PhoneNumber":
                         phone_number = str(item.get("Value"))
 
-                logger.info(f"Extracted amount: {amount}, Phone number: {phone_number}")
-
                 if phone_number is not None:
                     try:
                         user = User.objects.get(phone_number=phone_number)
                         chama = user.chama
                         if chama:
-                            logger.info(f"Chama found: {chama}, current balance: {chama.balance}")
                             chama.balance += amount
                             chama.save()
-                            logger.info(f"Updated balance: {chama.balance}")
                             return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
                         else:
-                            logger.error(f"User {user} is not associated with any Chama")
                             return JsonResponse({"ResultCode": 1, "ResultDesc": "User is not associated with any Chama"}, status=404)
                     except User.DoesNotExist:
-                        logger.error(f"User with phone number {phone_number} not found")
                         return JsonResponse({"ResultCode": 1, "ResultDesc": "User not found"}, status=404)
 
-            logger.error(f"Transaction failed or invalid, result code: {result_code}")
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Failed or invalid transaction"}, status=400)
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Invalid JSON data"}, status=400)
         except Exception as e:
-            logger.error(f"Unexpected error: {e}")
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Internal server error"}, status=500)
 
 
