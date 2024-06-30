@@ -1,7 +1,6 @@
 import requests, base64, json
 from django.conf import settings
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 from django.http import JsonResponse
 from rest_framework.views import APIView
@@ -11,6 +10,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
 
+from .models import Chama
 from .serializers import LoginSerializer, StkPushSerializer
 
 
@@ -43,11 +43,10 @@ class StkPushView(APIView):
         else:
             return phone_number
 
-    @csrf_exempt
     def post(self, request, *args, **kwargs):
         serializer = StkPushSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        amount = serializer.validated_data['amount']
+        amount = float(serializer.validated_data['amount'])  # Convert Decimal to float
 
         user = request.user
         phone_number = user.phone_number
@@ -69,15 +68,14 @@ class StkPushView(APIView):
         }
 
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        password = base64.b64encode(f"{settings.DARAJA_SHORTCODE}{settings.DARAJA_PASSKEY}{timestamp}".encode()).decode(
-            'utf-8')
+        password = base64.b64encode(f"{settings.DARAJA_SHORTCODE}{settings.DARAJA_PASSKEY}{timestamp}".encode()).decode('utf-8')
 
         payload = {
             "BusinessShortCode": settings.DARAJA_SHORTCODE,
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
-            "Amount": amount,
+            "Amount": amount,  # Amount is now a float
             "PartyA": formatted_phone_number,
             "PartyB": settings.DARAJA_SHORTCODE,
             "PhoneNumber": formatted_phone_number,
@@ -100,14 +98,34 @@ class StkPushView(APIView):
 
         return JsonResponse(json_response)
 
+
 class StkPushCallbackView(View):
-    @csrf_exempt
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
-        # Handle the callback data here
-        # You can parse the data and update the database as needed
 
-        return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
+        result_code = data.get("Body", {}).get("stkCallback", {}).get("ResultCode")
+        callback_metadata = data.get("Body", {}).get("stkCallback", {}).get("CallbackMetadata", {})
+
+        if result_code == 0:  # Transaction was successful
+            amount = 0
+            chama_account = None
+
+            for item in callback_metadata.get("Item", []):
+                if item.get("Name") == "Amount":
+                    amount = float(item.get("Value"))
+                elif item.get("Name") == "AccountReference":
+                    chama_account = int(item.get("Value"))
+
+            if chama_account is not None:
+                try:
+                    chama = Chama.objects.get(chama_account=chama_account)
+                    chama.balance += amount
+                    chama.save()
+                    return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
+                except Chama.DoesNotExist:
+                    return JsonResponse({"ResultCode": 1, "ResultDesc": "Chama not found"}, status=404)
+
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Failed or invalid transaction"}, status=400)
 
 
 class LoginView(APIView):
