@@ -13,8 +13,10 @@ ENVIRONMENT = env('ENVIRONMENT')
 
 if ENVIRONMENT == 'development':
     DEBUG = True
+    CSRF_COOKIE_SECURE = True
 else:
     DEBUG = False
+    CSRF_COOKIE_SECURE = False
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["*"])
 
