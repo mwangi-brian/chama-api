@@ -14,8 +14,8 @@ from django.views.decorators.csrf import csrf_exempt
 import logging
 from decimal import Decimal
 
-from .models import Chama, User
-from .serializers import LoginSerializer, StkPushSerializer
+from .models import User
+from .serializers import LoginSerializer, StkPushSerializer, DashboardSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class StkPushView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = StkPushSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        amount = float(serializer.validated_data['amount'])  # Convert Decimal to float
+        amount = float(serializer.validated_data['amount'])
 
         user = request.user
         phone_number = user.phone_number
@@ -80,7 +80,7 @@ class StkPushView(APIView):
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
-            "Amount": amount,  # Amount is now a float
+            "Amount": amount,
             "PartyA": formatted_phone_number,
             "PartyB": settings.DARAJA_SHORTCODE,
             "PhoneNumber": formatted_phone_number,
@@ -120,7 +120,6 @@ class StkPushCallbackView(View):
             if result_code == 0:  # Transaction was successful
                 amount = 0
                 phone_number = None
-                chama_account = None
 
                 for item in callback_metadata.get("Item", []):
                     if item.get("Name") == "Amount":
@@ -183,3 +182,16 @@ class LogoutView(APIView):
     def post(self, request, format=None):
         logout(request)
         return Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
+
+class UserDashboard(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        chama = user.chama
+
+        if not chama:
+            return Response({'error': 'User is not associated with any Chama'}, status=400)
+
+        serializer = DashboardSerializer(chama)
+        return Response(serializer.data)

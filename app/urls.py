@@ -7,4 +7,5 @@ urlpatterns = [
     path('callback/', views.StkPushCallbackView.as_view(), name='callback'),
     path('login/', views.LoginView.as_view(), name='sign-in'),
     path('logout/', views.LogoutView.as_view(), name='sign-out'),
+    path('', views.UserDashboard.as_view(), name='dashboard'),
 ]
