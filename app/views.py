@@ -15,7 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
 from django.db import transaction as db_transaction
 
-from .models import User, Transaction, Chama
+from .models import User, Transaction, Chama, ChamaUser
 from .serializers import LoginSerializer, StkPushSerializer, DashboardSerializer
 
 class StkPushView(APIView):
@@ -102,7 +102,6 @@ class StkPushView(APIView):
 
         return JsonResponse(json_response)
 
-
 @method_decorator(csrf_exempt, name='dispatch')
 class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
@@ -130,41 +129,44 @@ class StkPushCallbackView(View):
 
                 if phone_number is not None and transaction_id is not None:
                     try:
-                        user = User.objects.get(phone_number=phone_number)
-                        chama, created = Chama.objects.get_or_create(
-                            id=user.chama_id,
-                            defaults={'chama_account': user.chama.chama_account, 'balance': Decimal('0.00')}
-                        )
+                        user_id = request.GET.get("user_id")
+                        chama_id = request.GET.get("chama_id")
+                        chama_account = request.GET.get("chama_account")
 
-                        if not created:
-                            with db_transaction.atomic():
-                                # Update Chama balance
-                                chama.balance += amount
-                                chama.save()
+                        if not (user_id and chama_id and chama_account):
+                            return JsonResponse({"ResultCode": 1, "ResultDesc": "Missing required data"}, status=400)
 
-                                # Save transaction details
-                                Transaction.objects.create(
-                                    user=user,
-                                    chama=chama,
-                                    amount=amount,
-                                    transaction_id=transaction_id,
-                                    transaction_date=datetime.strptime(transaction_date, '%Y%m%d%H%M%S'),
-                                    phone_number=phone_number
-                                )
+                        user, _ = ChamaUser.objects.get_or_create(user_id=user_id, defaults={'phone_number': phone_number})
 
-                            return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
-                        else:
-                            return JsonResponse(
-                                {"ResultCode": 1, "ResultDesc": "User is not associated with any Chama"}, status=404)
-                    except User.DoesNotExist:
-                        return JsonResponse({"ResultCode": 1, "ResultDesc": "User not found"}, status=404)
+                        with db_transaction.atomic():
+                            chama, _ = Chama.objects.get_or_create(
+                                id=chama_id,
+                                defaults={'chama_account': chama_account, 'balance': Decimal('0.00')}
+                            )
+
+                            chama.balance += amount
+                            chama.save()
+
+                            Transaction.objects.create(
+                                user=user,
+                                chama=chama,
+                                amount=amount,
+                                transaction_id=transaction_id,
+                                transaction_date=datetime.strptime(transaction_date, '%Y%m%d%H%M%S'),
+                                phone_number=phone_number
+                            )
+
+                        return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
+
+                    except Exception as e:
+                        return JsonResponse({"ResultCode": 1, "ResultDesc": "Internal server error", "Error": str(e)}, status=500)
 
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Failed or invalid transaction"}, status=400)
 
         except json.JSONDecodeError as e:
-            return JsonResponse({"ResultCode": 1, "ResultDesc": "Invalid JSON data"}, status=400)
+            return JsonResponse({"ResultCode": 1, "ResultDesc": "Invalid JSON data", "Error": str(e)}, status=400)
         except Exception as e:
-            return JsonResponse({"ResultCode": 1, "ResultDesc": "Internal server error"}, status=500)
+            return JsonResponse({"ResultCode": 1, "ResultDesc": "Internal server error", "Error": str(e)}, status=500)
 
 
 class LoginView(APIView):
