@@ -61,14 +61,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.is_superuser
 
 class Chama(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    chama_name = models.CharField(max_length=30, null=True, blank=False)
-    chama_account = models.IntegerField(editable=False, unique=True)
+    id = models.CharField(primary_key=True, default=uuid.uuid4, editable=False, max_length=36)
+    chama_account = models.CharField(editable=False, unique=True, max_length=100)
     balance = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return str(self.chama_account)
+
 
 class Transaction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

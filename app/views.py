@@ -13,8 +13,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
+from django.db import transaction as db_transaction
 
-from .models import User
+from .models import User, Transaction, Chama
 from .serializers import LoginSerializer, StkPushSerializer, DashboardSerializer
 
 class StkPushView(APIView):
@@ -130,9 +131,13 @@ class StkPushCallbackView(View):
                 if phone_number is not None and transaction_id is not None:
                     try:
                         user = User.objects.get(phone_number=phone_number)
-                        chama = user.chama
-                        if chama:
-                            with transaction.atomic():
+                        chama, created = Chama.objects.get_or_create(
+                            id=user.chama_id,
+                            defaults={'chama_account': user.chama.chama_account, 'balance': Decimal('0.00')}
+                        )
+
+                        if not created:
+                            with db_transaction.atomic():
                                 chama.balance += amount
                                 chama.save()
 
@@ -147,7 +152,8 @@ class StkPushCallbackView(View):
 
                             return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
                         else:
-                            return JsonResponse({"ResultCode": 1, "ResultDesc": "User is not associated with any Chama"}, status=404)
+                            return JsonResponse(
+                                {"ResultCode": 1, "ResultDesc": "User is not associated with any Chama"}, status=404)
                     except User.DoesNotExist:
                         return JsonResponse({"ResultCode": 1, "ResultDesc": "User not found"}, status=404)
 
