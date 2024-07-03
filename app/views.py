@@ -49,11 +49,11 @@ class StkPushView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = StkPushSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        amount = float(serializer.validated_data['amount'])
-
-        user = request.user
         phone_number = serializer.validated_data['phone_number']
-        chama_account = user.chama.chama_account if user.chama else None
+        amount = float(serializer.validated_data['amount'])
+        user_id = serializer.validated_data['user_id']
+        chama_id = serializer.validated_data['chama_id']
+        chama_account = serializer.validated_data['chama_account']
 
         if not phone_number or not chama_account:
             return JsonResponse({'error': 'User is not associated with a chama or phone number is missing'}, status=400)
@@ -114,20 +114,37 @@ class StkPushCallbackView(View):
             if result_code == 0:  # Transaction was successful
                 amount = 0
                 phone_number = None
+                transaction_id = None
+                transaction_date = None
 
                 for item in callback_metadata.get("Item", []):
                     if item.get("Name") == "Amount":
                         amount = Decimal(item.get("Value"))
                     elif item.get("Name") == "PhoneNumber":
                         phone_number = str(item.get("Value"))
+                    elif item.get("Name") == "MpesaReceiptNumber":
+                        transaction_id = item.get("Value")
+                    elif item.get("Name") == "TransactionDate":
+                        transaction_date = item.get("Value")
 
-                if phone_number is not None:
+                if phone_number is not None and transaction_id is not None:
                     try:
                         user = User.objects.get(phone_number=phone_number)
                         chama = user.chama
                         if chama:
-                            chama.balance += amount
-                            chama.save()
+                            with transaction.atomic():
+                                chama.balance += amount
+                                chama.save()
+
+                                Transaction.objects.create(
+                                    user=user,
+                                    chama=chama,
+                                    amount=amount,
+                                    transaction_id=transaction_id,
+                                    transaction_date=datetime.strptime(transaction_date, '%Y%m%d%H%M%S'),
+                                    phone_number=phone_number
+                                )
+
                             return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
                         else:
                             return JsonResponse({"ResultCode": 1, "ResultDesc": "User is not associated with any Chama"}, status=404)

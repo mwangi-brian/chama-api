@@ -26,8 +26,6 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     phone_number = models.CharField(unique=True, max_length=15, null=True, blank=False)
-    first_name = models.CharField(max_length=30, null=True, blank=False)
-    last_name = models.CharField(max_length=30, null=True, blank=False)
     chama = models.ForeignKey('Chama', on_delete=models.SET_NULL, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -72,21 +70,13 @@ class Chama(models.Model):
     def __str__(self):
         return str(self.chama_account)
 
-class UserAccount(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True)
-    acc_id = models.IntegerField(editable=False, unique=True)
-    balance = models.DecimalField(default=0.00, max_digits=12, decimal_places=2)
-    is_active = models.BooleanField(default=True)
+class Transaction(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    chama = models.ForeignKey(Chama, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_id = models.CharField(max_length=100, unique=True)
+    transaction_date = models.DateTimeField()
+    phone_number = models.CharField(max_length=15)
 
     def __str__(self):
-        return f"{self.acc_id} - {self.user.first_name}"
-
-@receiver(pre_save, sender=UserAccount)
-def set_user_account_id(sender, instance, **kwargs):
-    if not instance.acc_id:
-        instance.acc_id = generate_account_number()
-
-@receiver(pre_save, sender=Chama)
-def set_chama_account_id(sender, instance, **kwargs):
-    if not instance.chama_account:
-        instance.chama_account = generate_account_number()
+        return f"Transaction {self.transaction_id} by {self.user.phone_number}"

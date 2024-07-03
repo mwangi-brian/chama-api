@@ -8,6 +8,9 @@ class LoginSerializer(serializers.Serializer):
 class StkPushSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
     amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    user_id = serializers.CharField()
+    chama_id = serializers.CharField()
+    chama_account = serializers.CharField()
 
 class DashboardSerializer(serializers.Serializer):
     chama_name = serializers.CharField()
