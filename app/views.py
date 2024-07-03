@@ -103,11 +103,15 @@ class StkPushView(APIView):
         return JsonResponse(json_response)
 
 
+import logging
+logger = logging.getLogger(__name__)
+
 @method_decorator(csrf_exempt, name='dispatch')
 class StkPushCallbackView(View):
     def post(self, request, *args, **kwargs):
         try:
             data = json.loads(request.body)
+            logger.debug(f"Received callback data: {data}")
 
             result_code = data.get("Body", {}).get("stkCallback", {}).get("ResultCode")
             callback_metadata = data.get("Body", {}).get("stkCallback", {}).get("CallbackMetadata", {})
@@ -128,6 +132,9 @@ class StkPushCallbackView(View):
                     elif item.get("Name") == "TransactionDate":
                         transaction_date = item.get("Value")
 
+                logger.debug(
+                    f"Parsed callback metadata: amount={amount}, phone_number={phone_number}, transaction_id={transaction_id}, transaction_date={transaction_date}")
+
                 if phone_number is not None and transaction_id is not None:
                     try:
                         user = User.objects.get(phone_number=phone_number)
@@ -138,9 +145,11 @@ class StkPushCallbackView(View):
 
                         if not created:
                             with db_transaction.atomic():
+                                # Update Chama balance
                                 chama.balance += amount
                                 chama.save()
 
+                                # Save transaction details
                                 Transaction.objects.create(
                                     user=user,
                                     chama=chama,
@@ -152,16 +161,21 @@ class StkPushCallbackView(View):
 
                             return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
                         else:
+                            logger.error("User is not associated with any Chama")
                             return JsonResponse(
                                 {"ResultCode": 1, "ResultDesc": "User is not associated with any Chama"}, status=404)
                     except User.DoesNotExist:
+                        logger.error("User not found")
                         return JsonResponse({"ResultCode": 1, "ResultDesc": "User not found"}, status=404)
 
+            logger.error("Failed or invalid transaction")
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Failed or invalid transaction"}, status=400)
 
         except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON data: {e}")
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Invalid JSON data"}, status=400)
         except Exception as e:
+            logger.error(f"Internal server error: {e}", exc_info=True)
             return JsonResponse({"ResultCode": 1, "ResultDesc": "Internal server error"}, status=500)
 
 
